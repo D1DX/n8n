@@ -1,0 +1,143 @@
+{{
+(() => {
+  let raw = '';
+  try {
+    raw = $.json.content ?? '';
+  } catch (e) {
+    raw = '';
+  }
+
+  const s = String(raw);
+  if (!s.trim()) return 0.8;
+
+  // ---------------------------
+  // Helpers
+  // ---------------------------
+  const clamp = (n, min, max) => Math.min(Math.max(n, min), max);
+  const randFloat = (min, max) => min + Math.random() * (max - min);
+
+  const randNormal = (mean, std) => {
+    let u = 0, v = 0;
+    while (u === 0) u = Math.random();
+    while (v === 0) v = Math.random();
+    const z = Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+    return mean + z * std;
+  };
+
+  const count = (re) => (s.match(re) || []).length;
+
+  // Emoji count without \p{...}
+  const countEmojis = () => {
+    // Try unicode-range regex using RegExp constructor (catchable)
+    try {
+      const r = new RegExp(
+        // Common emoji blocks + dingbats/symbols (not perfect, but practical)
+        "[\\u{1F300}-\\u{1FAFF}\\u{2600}-\\u{27BF}]",
+        "gu"
+      );
+      return count(r);
+    } catch (e) {
+      // Fallback: surrogate pairs (rough)
+      return count(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g);
+    }
+  };
+
+  // ---------------------------
+  // Measures
+  // ---------------------------
+  const chars = s.length;
+  const words = (s.trim().match(/\S+/g) || []).length;
+  const lines = s.split('\n').length;
+  const paras = (s.split(/\n{2,}/).filter(p => p.trim().length > 0)).length;
+
+  const strongPunct = count(/[.!?]/g);
+  const commas = count(/,/g);
+  const otherPunct = count(/[;:]/g);
+  const quotes = count(/["'“”‘’]/g);
+  const brackets = count(/[()[\]{}<>]/g);
+  const slashes = count(/[\\/]/g);
+  const dashes = count(/[-–—]/g);
+  const atHash = count(/[@#]/g);
+  const nums = count(/[0-9]/g);
+
+  // "Special chars" without unicode properties:
+  // Anything not ASCII letters/digits/space/basic punctuation
+  const specialChars = count(/[^A-Za-z0-9\s.,!?;:"'“”‘’()[\]{}<>@#\/\\\-–—]/g);
+
+  const emojis = countEmojis();
+
+  const hasUrl = /https?:\/\/|www\./i.test(s) ? 1 : 0;
+  const hasEmail = /\b\S+@\S+\.\S+\b/.test(s) ? 1 : 0;
+  const hasCodey = /[`$=><_|^~]/.test(s) || /\b(const|let|var|function|=>)\b/.test(s) ? 1 : 0;
+
+  const punctTotal = strongPunct + commas + otherPunct;
+  const specialDensity = chars ? (specialChars + emojis + brackets + slashes + quotes) / chars : 0;
+
+  // ---------------------------
+  // Typing model
+  // ---------------------------
+  let cps = clamp(randNormal(5.6, 1.2), 2.2, 9.0);
+
+  cps *= clamp(1 - specialDensity * randFloat(0.25, 0.60), 0.55, 1.0);
+  if (hasUrl) cps *= randFloat(0.78, 0.92);
+  if (hasEmail) cps *= randFloat(0.82, 0.95);
+  if (hasCodey) cps *= randFloat(0.70, 0.90);
+
+  let typing = chars / cps;
+
+  // Pauses
+  const burstSize = randFloat(28, 85);
+  const bursts = clamp(Math.round(chars / burstSize), 1, 40);
+  const microPauses = bursts * randFloat(0.08, 0.22);
+
+  let punctPauses = 0;
+  punctPauses += strongPunct * randFloat(0.28, 0.80);
+  punctPauses += commas * randFloat(0.10, 0.35);
+  punctPauses += otherPunct * randFloat(0.14, 0.42);
+
+  const emojiPauses = emojis * randFloat(0.25, 0.95);
+
+  const symbolPauses =
+    quotes * randFloat(0.03, 0.10) +
+    brackets * randFloat(0.04, 0.12) +
+    slashes * randFloat(0.04, 0.14) +
+    dashes * randFloat(0.02, 0.08) +
+    atHash * randFloat(0.02, 0.10) +
+    nums * randFloat(0.004, 0.020) +
+    specialChars * randFloat(0.05, 0.18);
+
+  const linePauses = (lines > 1) ? (lines - 1) * randFloat(0.18, 0.60) : 0;
+  const paraPauses = (paras > 1) ? (paras - 1) * randFloat(0.35, 1.10) : 0;
+
+  // Thinking
+  let thinking = randFloat(0.25, 1.60) + words * randFloat(0.015, 0.055);
+  const qMarks = count(/\?/g);
+  if (qMarks) thinking += qMarks * randFloat(0.18, 0.70);
+
+  const hasList = /^\s*[-*•]\s+/m.test(s) ? 1 : 0;
+  if (hasList) thinking += randFloat(0.25, 1.10);
+
+  if (Math.random() < 0.12) thinking += randFloat(0.7, 2.4);
+
+  // Correction simulation
+  const correctionProb = clamp(0.06 + specialDensity * 0.55 + (hasUrl || hasCodey ? 0.08 : 0), 0.06, 0.55);
+  let correction = 0;
+  if (Math.random() < correctionProb) {
+    const correctionBursts = clamp(Math.round(randFloat(1, 1 + words / 18)), 1, 6);
+    correction = correctionBursts * randFloat(0.35, 1.40) + randFloat(0.1, 0.6);
+  }
+
+  // Fatigue
+  const fatigue =
+    chars > 1200 ? randFloat(1.20, 1.55) :
+    chars > 600  ? randFloat(1.08, 1.28) :
+    chars > 300  ? randFloat(1.03, 1.16) :
+                   1.0;
+
+  let total = (typing + microPauses + punctPauses + emojiPauses + symbolPauses + linePauses + paraPauses + thinking + correction) * fatigue;
+  total = total + randFloat(-0.20, 0.50);
+  total = clamp(total, 0.8, 90);
+
+  return Number(total.toFixed(2));
+})()
+}}
