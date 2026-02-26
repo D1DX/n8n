@@ -2,7 +2,7 @@
 (() => {
   let raw = '';
   try {
-    raw = $.json.content ?? '';
+    raw = $json.content ?? '';
   } catch (e) {
     raw = '';
   }
