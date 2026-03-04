@@ -5,7 +5,7 @@
     "name": "N8N",
     "profile": "service-repo",
     "owner": "D1DX",
-    "root": "/Users/danielrudaev/Desktop/n8n",
+    "root": "/Users/danielrudaev/Desktop/.cloud-align-work/n8n",
     "requires_mcp_template": false
   },
   "providers": {
